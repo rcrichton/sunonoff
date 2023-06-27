@@ -6,7 +6,7 @@ Sunsynk/Sonoff integration and automation
 
 ```bash
 npm i
-mv template.env .env
+cp template.env .env
 # populate .env
 npm start
 ```
