@@ -26,39 +26,57 @@ async function main() {
   const flow = await fetchFlow({ plantId })
   console.debug(flow)
 
-  const devices: any[] = await connection.getDevices()
+  const devices: any[] = (await connection.getDevices()) || []
   console.log('Available devices:')
   console.log(devices.map((d) => d.name))
-  const targetDevice = devices.find(
-    (device) => device.name === process.env.TARGET_DEVICE_NAME
+  const targetDeviceNames = process.env.TARGET_DEVICE_NAMES?.split(',') || []
+  const targetDevices = targetDeviceNames.map((name) =>
+    devices.find((device) => device.name === name)
   )
 
-  if (flow.data.soc === 100 && hours > 10 && hours < 16) {
+  if (targetDevices.includes(undefined)) {
+    console.error(
+      'One of the target device names cannot be found, check the name is correct',
+      targetDeviceNames
+    )
+    return
+  }
+
+  if (
+    flow.data.soc === 100 &&
+    hours > 9 &&
+    hours < 16 &&
+    flow.data.loadOrEpsPower < 3000
+  ) {
     console.log(
-      `Criteria met, battery at ${flow.data.soc}% and time is in solar hours`
+      `Criteria met, battery at ${flow.data.soc}%, time is in solar hours and usage is low`
     )
 
-    console.log(`Setting device '${targetDevice.name}' state to ON`)
-    const status = await connection.setDevicePowerState(
-      targetDevice.deviceid,
-      'on'
-    )
-    console.log(status)
+    for (const targetDevice of targetDevices) {
+      console.log(`Setting device '${targetDevice.name}' state to ON`)
+      const status = await connection.setDevicePowerState(
+        targetDevice.deviceid,
+        'on'
+      )
+      console.log(status)
+    }
   } else {
     console.log('Criteria not met.')
 
-    console.log(`Setting device '${targetDevice.name}' state to OFF`)
-    const status = await connection.setDevicePowerState(
-      targetDevice.deviceid,
-      'off'
-    )
-    console.log(status)
+    for (const targetDevice of targetDevices) {
+      console.log(`Setting device '${targetDevice.name}' state to OFF`)
+      const status = await connection.setDevicePowerState(
+        targetDevice.deviceid,
+        'off'
+      )
+      console.log(status)
+    }
   }
 
   console.log(`Done, took ${(Date.now() - today.getTime()) / 1000}s`)
 }
 
-setInterval(main, 5 * 60 * 1000) // Run every 5 minutes
+setInterval(main, 15 * 60 * 1000) // Run every 5 minutes
 main()
 
 process.on('SIGINT', () => {
