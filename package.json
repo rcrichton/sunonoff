@@ -7,8 +7,10 @@
     "start": "ts-node sunonoff.ts",
     "build": "tsc",
     "start:prod": "node dist/sunonoff.js",
-    "docker:build": "docker build . -t sunonoff",
-    "docker:run": "docker run --env-file .env sunonoff",
+    "docker": "npm run docker:build && npm run docker:run",
+    "docker:build": "docker build . -t rcrichton/sunonoff",
+    "docker:run": "docker run --env-file .env rcrichton/sunonoff",
+    "docker:push": "docker push rcrichton/sunonoff",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
