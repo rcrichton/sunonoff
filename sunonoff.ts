@@ -76,7 +76,7 @@ async function main() {
   console.log(`Done, took ${(Date.now() - today.getTime()) / 1000}s`)
 }
 
-setInterval(main, 15 * 60 * 1000) // Run every 5 minutes
+setInterval(main, parseInt(process.env.INTERVAL || '15') * 60 * 1000) // Run every x minutes
 main()
 
 process.on('SIGINT', () => {
