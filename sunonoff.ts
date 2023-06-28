@@ -60,3 +60,7 @@ async function main() {
 
 setInterval(main, 5 * 60 * 1000) // Run every 5 minutes
 main()
+
+process.on('SIGINT', () => {
+  process.exit()
+})
