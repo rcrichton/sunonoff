@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import ewelink from 'ewelink-api'
-import { fetchFlow, fetchPlants } from './sunsynk'
+import { login, fetchFlow, fetchPlants } from './sunsynk'
 
 const connection = new ewelink({
   email: process.env.EWELINK_EMAIL || '',
@@ -11,6 +11,12 @@ async function main() {
   const today = new Date()
   const hours = today.getHours()
   console.log(today.toISOString())
+
+  console.log('Logging into Sunsynk account...')
+  await login({
+    email: process.env.SUNSYNK_EMAIL || '',
+    password: process.env.SUNSYNK_PASS || ''
+  })
 
   console.log('Fetching solar plantID...')
   const plantId = (await fetchPlants()).data?.infos[0]?.id
@@ -28,7 +34,9 @@ async function main() {
   )
 
   if (flow.data.soc === 100 && hours > 10 && hours < 16) {
-    console.log(`Criteria met, battery at ${flow.data.soc}% and in solar hours`)
+    console.log(
+      `Criteria met, battery at ${flow.data.soc}% and time is in solar hours`
+    )
 
     console.log(`Setting device '${targetDevice.name}' state to ON`)
     const status = await connection.setDevicePowerState(
@@ -47,8 +55,8 @@ async function main() {
     console.log(status)
   }
 
-  console.log(`Done, took ${Date.now() - today.getTime()}ms`)
+  console.log(`Done, took ${(Date.now() - today.getTime()) / 1000}s`)
 }
 
-// setInterval(main, 30000)
+setInterval(main, 5 * 60 * 1000) // Run every 5 minutes
 main()
