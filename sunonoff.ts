@@ -43,7 +43,7 @@ async function main() {
   }
 
   if (
-    flow.data.soc === 100 &&
+    flow.data.soc >= 99 &&
     hours > 9 &&
     hours < 16 &&
     flow.data.loadOrEpsPower < 3000
