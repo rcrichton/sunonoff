@@ -7,73 +7,83 @@ const connection = new ewelink({
   password: process.env.EWELINK_PASS || ''
 })
 
+const START_HOUR = parseInt(process.env.START_HOUR || '9')
+const STOP_HOUR = parseInt(process.env.STOP_HOUR || '16')
+const LOAD_LIMIT = parseInt(process.env.LOAD_LIMIT || '3000')
+
 async function main() {
-  const today = new Date()
-  const hours = today.getHours()
-  console.log(today.toISOString())
+  try {
+    const today = new Date()
+    const hours = today.getHours()
+    console.log(today.toISOString())
 
-  console.log('Logging into Sunsynk account...')
-  await login({
-    email: process.env.SUNSYNK_EMAIL || '',
-    password: process.env.SUNSYNK_PASS || ''
-  })
+    if (hours < START_HOUR || hours >= STOP_HOUR) {
+      console.log(
+        `Outside of control hours (${START_HOUR}-${STOP_HOUR}), do nothing.`
+      )
+      return
+    }
 
-  console.log('Fetching solar plantID...')
-  const plantId = (await fetchPlants()).data?.infos[0]?.id
-  console.log(plantId)
+    console.log('Logging into Sunsynk account...')
+    await login({
+      email: process.env.SUNSYNK_EMAIL || '',
+      password: process.env.SUNSYNK_PASS || ''
+    })
 
-  console.log(`Fetching solar flow data...`)
-  const flow = await fetchFlow({ plantId })
-  console.debug(flow)
+    console.log('Fetching solar plantID...')
+    const plantId = (await fetchPlants()).data?.infos[0]?.id
+    console.log(plantId)
 
-  const devices: any[] = (await connection.getDevices()) || []
-  console.log('Available devices:')
-  console.log(devices.map((d) => d.name))
-  const targetDeviceNames = process.env.TARGET_DEVICE_NAMES?.split(',') || []
-  const targetDevices = targetDeviceNames.map((name) =>
-    devices.find((device) => device.name === name)
-  )
+    console.log(`Fetching solar flow data...`)
+    const flow = await fetchFlow({ plantId })
+    console.debug(flow)
 
-  if (targetDevices.includes(undefined)) {
-    console.error(
-      'One of the target device names cannot be found, check the name is correct',
-      targetDeviceNames
-    )
-    return
-  }
-
-  if (
-    flow.data.soc >= 99 &&
-    hours > 9 &&
-    hours < 16 &&
-    flow.data.loadOrEpsPower < 3000
-  ) {
-    console.log(
-      `Criteria met, battery at ${flow.data.soc}%, time is in solar hours and usage is low`
+    const devices: any[] = (await connection.getDevices()) || []
+    console.log('Available devices:')
+    console.log(devices.map((d) => d.name))
+    const targetDeviceNames = process.env.TARGET_DEVICE_NAMES?.split(',') || []
+    const targetDevices = targetDeviceNames.map((name) =>
+      devices.find((device) => device.name === name)
     )
 
-    for (const targetDevice of targetDevices) {
-      console.log(`Setting device '${targetDevice.name}' state to ON`)
-      const status = await connection.setDevicePowerState(
-        targetDevice.deviceid,
-        'on'
+    if (targetDevices.includes(undefined)) {
+      console.error(
+        'One of the target device names cannot be found, check the name is correct',
+        targetDeviceNames
       )
-      console.log(status)
+      return
     }
-  } else {
-    console.log('Criteria not met.')
 
-    for (const targetDevice of targetDevices) {
-      console.log(`Setting device '${targetDevice.name}' state to OFF`)
-      const status = await connection.setDevicePowerState(
-        targetDevice.deviceid,
-        'off'
+    if (flow.data.soc >= 99 && flow.data.loadOrEpsPower < LOAD_LIMIT) {
+      console.log(
+        `Criteria met, battery at ${flow.data.soc}%, time is in control hours (${START_HOUR}-${STOP_HOUR}) and usage is < ${LOAD_LIMIT}kw`
       )
-      console.log(status)
+
+      for (const targetDevice of targetDevices) {
+        console.log(`Setting device '${targetDevice.name}' state to ON`)
+        const status = await connection.setDevicePowerState(
+          targetDevice.deviceid,
+          'on'
+        )
+        console.log(status)
+      }
+    } else {
+      console.log('Criteria not met.')
+
+      for (const targetDevice of targetDevices) {
+        console.log(`Setting device '${targetDevice.name}' state to OFF`)
+        const status = await connection.setDevicePowerState(
+          targetDevice.deviceid,
+          'off'
+        )
+        console.log(status)
+      }
     }
+
+    console.log(`Done, took ${(Date.now() - today.getTime()) / 1000}s`)
+  } catch (err) {
+    console.error('An error occurred:', err)
   }
-
-  console.log(`Done, took ${(Date.now() - today.getTime()) / 1000}s`)
 }
 
 setInterval(main, parseInt(process.env.INTERVAL || '15') * 60 * 1000) // Run every x minutes
