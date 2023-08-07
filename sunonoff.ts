@@ -11,6 +11,26 @@ const START_HOUR = parseInt(process.env.START_HOUR || '9')
 const STOP_HOUR = parseInt(process.env.STOP_HOUR || '16')
 const LOAD_LIMIT = parseInt(process.env.LOAD_LIMIT || '3000')
 
+let controllingDevices = false
+
+async function fetchTargetDevices() {
+  const devices: any[] = (await connection.getDevices()) || []
+  console.log('Available devices:')
+  console.log(devices.map((d) => d.name))
+  const targetDeviceNames = process.env.TARGET_DEVICE_NAMES?.split(',') || []
+  const targetDevices = targetDeviceNames.map((name) =>
+    devices.find((device) => device.name === name)
+  )
+
+  if (targetDevices.includes(undefined)) {
+    throw new Error(
+      `One of the target device names cannot be found, check the name is correct: ${targetDeviceNames}`
+    )
+  }
+
+  return targetDevices
+}
+
 async function main() {
   try {
     const today = new Date()
@@ -18,10 +38,34 @@ async function main() {
     console.log(today.toISOString())
 
     if (hours < START_HOUR || hours >= STOP_HOUR) {
-      console.log(
-        `Outside of control hours (${START_HOUR}-${STOP_HOUR}), do nothing.`
-      )
+      if (controllingDevices === true) {
+        console.log(
+          'Ending control of devices, turning all controlled devices off...'
+        )
+
+        const targetDevices = await fetchTargetDevices()
+        for (const targetDevice of targetDevices) {
+          console.log(`Setting device '${targetDevice.name}' state to OFF`)
+          const status = await connection.setDevicePowerState(
+            targetDevice.deviceid,
+            'off'
+          )
+          console.log(status)
+        }
+
+        controllingDevices = false
+      } else {
+        console.log(
+          `Outside of control hours (${START_HOUR}-${STOP_HOUR}), do nothing.`
+        )
+      }
+
       return
+    }
+
+    if (!controllingDevices) {
+      controllingDevices = true
+      console.log('Starting to control devices based on START_HOUR.')
     }
 
     console.log('Logging into Sunsynk account...')
@@ -38,21 +82,7 @@ async function main() {
     const flow = await fetchFlow({ plantId })
     console.debug(flow)
 
-    const devices: any[] = (await connection.getDevices()) || []
-    console.log('Available devices:')
-    console.log(devices.map((d) => d.name))
-    const targetDeviceNames = process.env.TARGET_DEVICE_NAMES?.split(',') || []
-    const targetDevices = targetDeviceNames.map((name) =>
-      devices.find((device) => device.name === name)
-    )
-
-    if (targetDevices.includes(undefined)) {
-      console.error(
-        'One of the target device names cannot be found, check the name is correct',
-        targetDeviceNames
-      )
-      return
-    }
+    const targetDevices = await fetchTargetDevices()
 
     if (flow.data.soc >= 99 && flow.data.loadOrEpsPower < LOAD_LIMIT) {
       console.log(
